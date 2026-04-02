@@ -1,0 +1,4 @@
+Abstract:
+Echo-Blade: Aetherbound is an immersive, multi-modal Action-RPG that bridges the gap between physical gesture and vocal incantation. Utilizing a custom-built haptic glove interface powered by an ESP-based system and dual-flex sensors, the player navigates a "Swords and Magic" world through a binary-coded gesture system (00, 01, 10, 11).
+
+Unlike traditional controllers, combat in Aetherbound requires synchronous physical and verbal triggers: a player must physically "Grasp the Hilt" (flex gesture) while simultaneously shouting a command like "Slash" to execute an attack, or "Channel Mana" while chanting "Ignis" to summon fire. By integrating low-latency serial communication with a continuous-listening voice recognition engine, the project explores the synergy of Natural User Interfaces (NUI) in gaming, creating a high-stakes combat flow where the player’s body and voice are the primary weapons.
