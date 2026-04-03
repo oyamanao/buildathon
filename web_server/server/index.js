@@ -1,36 +1,40 @@
+import 'dotenv/config';
 import express from 'express';
 import cors from 'cors';
-import Database from 'better-sqlite3';
+import { neon } from '@neondatabase/serverless';
 import bcrypt from 'bcryptjs';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 const app = express();
 const port = process.env.PORT || 3000;
 
-// Database setup
-const db = new Database(join(__dirname, 'echo_blade.db'));
-db.pragma('journal_mode = WAL');
+// ─── Database setup (Neon PostgreSQL) ─────────────────
+const sql = neon(process.env.DATABASE_URL);
 
-db.exec(`
-  CREATE TABLE IF NOT EXISTS users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    username TEXT UNIQUE NOT NULL,
-    password_hash TEXT NOT NULL,
-    level INTEGER DEFAULT 1,
-    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-  )
-`);
+// Create tables on first run
+async function initDb() {
+  await sql`
+    CREATE TABLE IF NOT EXISTS users (
+      id SERIAL PRIMARY KEY,
+      username TEXT UNIQUE NOT NULL,
+      password_hash TEXT NOT NULL,
+      level INTEGER DEFAULT 1,
+      created_at TIMESTAMPTZ DEFAULT NOW()
+    )
+  `;
+  console.log('✅ Database tables ready');
+}
 
-app.use(cors());
+initDb().catch(err => console.error('DB init error:', err));
+
+// ─── Middleware ────────────────────────────────────────
+app.use(cors({
+  origin: process.env.CORS_ORIGIN || '*'
+}));
 app.use(express.json());
 
 // ─── Auth Routes ──────────────────────────────────────
 
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -44,26 +48,26 @@ app.post('/api/auth/register', (req, res) => {
       return res.status(400).json({ error: 'Password must be at least 4 characters' });
     }
 
-    const existing = db.prepare('SELECT id FROM users WHERE username = ?').get(username);
-    if (existing) {
+    const existing = await sql`SELECT id FROM users WHERE username = ${username}`;
+    if (existing.length > 0) {
       return res.status(409).json({ error: 'Username already taken' });
     }
 
     const hash = bcrypt.hashSync(password, 10);
-    const result = db.prepare('INSERT INTO users (username, password_hash) VALUES (?, ?)').run(username, hash);
+    const result = await sql`
+      INSERT INTO users (username, password_hash)
+      VALUES (${username}, ${hash})
+      RETURNING id, username, level
+    `;
 
-    res.json({
-      id: result.lastInsertRowid,
-      username,
-      level: 1
-    });
+    res.json(result[0]);
   } catch (err) {
     console.error('Register error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.post('/api/auth/login', (req, res) => {
+app.post('/api/auth/login', async (req, res) => {
   try {
     const { username, password } = req.body;
 
@@ -71,11 +75,12 @@ app.post('/api/auth/login', (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE username = ?').get(username);
-    if (!user) {
+    const rows = await sql`SELECT * FROM users WHERE username = ${username}`;
+    if (rows.length === 0) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    const user = rows[0];
     if (!bcrypt.compareSync(password, user.password_hash)) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -93,20 +98,22 @@ app.post('/api/auth/login', (req, res) => {
 
 // ─── Progress Routes ──────────────────────────────────
 
-app.get('/api/user/progress/:userId', (req, res) => {
+app.get('/api/user/progress/:userId', async (req, res) => {
   try {
-    const user = db.prepare('SELECT id, username, level FROM users WHERE id = ?').get(req.params.userId);
-    if (!user) {
+    const rows = await sql`
+      SELECT id, username, level FROM users WHERE id = ${req.params.userId}
+    `;
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
-    res.json(user);
+    res.json(rows[0]);
   } catch (err) {
     console.error('Progress fetch error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-app.post('/api/user/progress', (req, res) => {
+app.post('/api/user/progress', async (req, res) => {
   try {
     const { userId, level } = req.body;
 
@@ -114,23 +121,35 @@ app.post('/api/user/progress', (req, res) => {
       return res.status(400).json({ error: 'userId and level are required' });
     }
 
-    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(userId);
-    if (!user) {
+    const rows = await sql`SELECT * FROM users WHERE id = ${userId}`;
+    if (rows.length === 0) {
       return res.status(404).json({ error: 'User not found' });
     }
 
     // Only save if new level is higher (don't allow going back)
-    const newLevel = Math.max(user.level, level);
-    db.prepare('UPDATE users SET level = ? WHERE id = ?').run(newLevel, userId);
+    const newLevel = Math.max(rows[0].level, level);
+    await sql`UPDATE users SET level = ${newLevel} WHERE id = ${userId}`;
 
-    res.json({ id: userId, level: newLevel });
+    res.json({ id: Number(userId), level: newLevel });
   } catch (err) {
     console.error('Progress save error:', err);
     res.status(500).json({ error: 'Server error' });
   }
 });
 
-// Start server
-app.listen(port, () => {
-  console.log(`⚔️  Echo-Blade server running at http://localhost:${port}`);
+// Health check
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
+
+// Catch-all for unknown API routes
+app.all('/api/*', (req, res) => {
+  res.status(404).json({ error: 'API endpoint not found' });
+});
+
+// ─── Start server (local dev) / Export for Vercel ─────
+app.listen(port, () => {
+  console.log(`⚔️  Echo-Blade server running at port ${port}`);
+});
+
+export default app;

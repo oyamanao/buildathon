@@ -136,9 +136,10 @@ export default function GameScreen({ user, onLogout }) {
   }, []);
 
   // ─── Save progress ──────────────────────────────
+  const API_BASE = import.meta.env.VITE_API_URL || '';
   const saveProgress = async (level) => {
     try {
-      await fetch('/api/user/progress', {
+      await fetch(`${API_BASE}/api/user/progress`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ userId: user.id, level }),

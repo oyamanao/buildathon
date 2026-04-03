@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from 'react';
 
-const API = '/api/auth';
+const API_BASE = import.meta.env.VITE_API_URL || '';
+const API = `${API_BASE}/api/auth`;
 
 // Fox idle sprite frames from atlas.json
 const FOX_IDLE_FRAMES = [
