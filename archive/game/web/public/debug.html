@@ -1,0 +1,167 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echo-Blade Serial Debug</title>
+  <style>
+    body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+    h1 { color: #0ff; }
+    button { padding: 10px 20px; background: #0ff; color: #000; border: none; cursor: pointer; font-weight: bold; margin-right: 5px; }
+    button:hover { background: #00ffff; }
+    #log { border: 2px solid #0f0; height: 500px; overflow-y: auto; padding: 10px; background: #001a00; white-space: pre-wrap; word-wrap: break-word; font-size: 12px; margin-top: 10px; }
+    .status { margin: 10px 0; padding: 10px; background: #1a1a1a; border-left: 3px solid #0ff; }
+  </style>
+</head>
+<body>
+  <h1>🔧 Echo-Blade Serial Debug Console</h1>
+  <div class="status">
+    <strong>Status:</strong> <span id="status" style="color: #0f0;">Disconnected</span>
+  </div>
+  <div>
+    <button id="connectBtn">Connect Serial Port (COM7)</button>
+    <button id="clearBtn">Clear Log</button>
+    <button id="testBtn">Send Test Data</button>
+    <button id="backBtn" onclick="window.location.href='/'">Back to Game</button>
+  </div>
+  
+  <h2>Raw Serial Output:</h2>
+  <div id="log">[Waiting for connection...]</div>
+
+  <script>
+    const log = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const testBtn = document.getElementById('testBtn');
+
+    let port = null;
+    let connected = false;
+
+    function addLog(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent += `[${timestamp}] ${msg}\n`;
+      log.scrollTop = log.scrollHeight;
+      console.log(msg);
+    }
+
+    async function connect() {
+      if (!('serial' in navigator)) {
+        addLog('❌ Web Serial API not supported! Use Chrome/Edge.');
+        statusEl.textContent = '❌ Not Supported';
+        statusEl.style.color = '#ff4444';
+        return;
+      }
+
+      try {
+        addLog('🔌 Requesting serial port...');
+        port = await navigator.serial.requestPort();
+        addLog('✅ Port selected');
+
+        addLog('📡 Opening port at 115200 baud...');
+        await port.open({ baudRate: 115200 });
+        addLog('✅ Port opened successfully');
+
+        connected = true;
+        statusEl.textContent = '✅ Connected';
+        statusEl.style.color = '#00ff00';
+        connectBtn.textContent = 'Disconnect';
+        addLog('🎯 Ready to receive data...\n');
+
+        const decoder = new TextDecoderStream();
+        const inputStream = decoder.readable;
+        const reader = inputStream.getReader();
+        port.readable.pipeTo(decoder.writable).catch(err => {
+          addLog(`⚠️ Pipe error: ${err.message}`);
+        });
+
+        async function readLoop() {
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) {
+                addLog('⚠️ Reader closed');
+                break;
+              }
+              if (!value) continue;
+              
+              // Show raw plaintext
+              addLog(`📥 RAW: "${value.trim()}"`);
+              
+              // Show as hex for debugging
+              let hex = '';
+              for (let i = 0; i < value.length; i++) {
+                const code = value.charCodeAt(i);
+                hex += code.toString(16).padStart(2, '0') + ' ';
+                if (code === 10) hex += '(LF) '; // line feed
+                if (code === 13) hex += '(CR) '; // carriage return
+              }
+              addLog(`   HEX: ${hex}`);
+              
+              // Try parsing
+              const lines = value.split(/[\r\n]+/).filter(Boolean);
+              for (const line of lines) {
+                const parts = line.split(',').map(p => p.trim());
+                if (parts.length >= 3 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+                  addLog(`   ✓ PARSED: S1=${parts[0]}, S2=${parts[1]}, Action=${parts[2]}`);
+                } else {
+                  addLog(`   ✗ PARSE FAILED: ${line}`);
+                }
+              }
+            }
+          } catch (err) {
+            addLog(`❌ Read error: ${err.message}`);
+            connected = false;
+            statusEl.textContent = '❌ Disconnected';
+            statusEl.style.color = '#ff4444';
+            connectBtn.textContent = 'Connect';
+          }
+        }
+
+        readLoop();
+      } catch (err) {
+        addLog(`❌ Connection error: ${err.message}`);
+        connected = false;
+        statusEl.textContent = '❌ Error';
+        statusEl.style.color = '#ff4444';
+      }
+    }
+
+    function disconnect() {
+      if (port) {
+        port.close().catch(() => {});
+        addLog('🔌 Port closed\n');
+        connected = false;
+        statusEl.textContent = '❌ Disconnected';
+        statusEl.style.color = '#ff8844';
+        connectBtn.textContent = 'Connect Serial Port (COM7)';
+      }
+    }
+
+    connectBtn.addEventListener('click', () => {
+      if (connected) {
+        disconnect();
+      } else {
+        connect();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      log.textContent = '[Log cleared]\n';
+    });
+
+    testBtn.addEventListener('click', () => {
+      addLog('💡 [TEST] Simulating ESP32 output:\n');
+      addLog('📥 RAW: "450,480,FORWARD"');
+      addLog('   ✓ PARSED: S1=450, S2=480, Action=FORWARD\n');
+      addLog('📥 RAW: "520,560,IDLE"');
+      addLog('   ✓ PARSED: S1=520, S2=560, Action=IDLE\n');
+      addLog('📥 RAW: "200,150,FORWARD"');
+      addLog('   ✓ PARSED: S1=200, S2=150, Action=FORWARD\n');
+    });
+
+    addLog('✨ Serial Debug Console Ready');
+    addLog('Pro tip: Press F12 for even more console details');
+  </script>
+</body>
+</html>

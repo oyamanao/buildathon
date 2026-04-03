@@ -1,0 +1,9 @@
+:root { color-scheme: dark; }
+* { box-sizing: border-box; }
+body { font-family: 'Inter', sans-serif; margin: 0; background: #0d0f14; color: #e7ebf3; }
+.app { max-width: 900px; margin: 24px auto; padding: 12px; }
+header h1 { margin: 0 0 14px; }
+.controls { margin: 12px 0; }
+.controls button { background-color: #2962ff; border: 0; color: #fff; padding: 10px 16px; font-size: 1rem; border-radius: 6px; cursor: pointer; }
+.hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 8px; margin-top: 12px; }
+.card { background: #12181f; border: 1px solid #23304b; padding: 12px; border-radius: 10px; }

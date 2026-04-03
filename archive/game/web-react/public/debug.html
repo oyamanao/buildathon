@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echo-Blade Serial Debug</title>
+  <style>
+    body { font-family: monospace; background: #000; color: #0f0; padding: 20px; }
+    h1 { color: #0ff; }
+    button { padding: 10px 20px; background: #0ff; color: #000; border: none; cursor: pointer; font-weight: bold; }
+    #log { border: 2px solid #0f0; height: 500px; overflow-y: auto; padding: 10px; background: #001a00; white-space: pre-wrap; word-wrap: break-word; font-size: 12px; }
+    .status { margin: 10px 0; padding: 10px; background: #1a1a1a; border-left: 3px solid #0ff; }
+  </style>
+</head>
+<body>
+  <h1>🔧 Echo-Blade Serial Debug Console</h1>
+  <div class="status">
+    <strong>Status:</strong> <span id="status">Disconnected</span>
+  </div>
+  <button id="connectBtn">Connect Serial Port</button>
+  <button id="clearBtn" style="margin-left: 10px;">Clear Log</button>
+  <button id="testBtn" style="margin-left: 10px;">Send Test Data (Debug)</button>
+  
+  <h2>Raw Serial Output:</h2>
+  <div id="log">[Waiting for connection...]</div>
+
+  <script>
+    const log = document.getElementById('log');
+    const statusEl = document.getElementById('status');
+    const connectBtn = document.getElementById('connectBtn');
+    const clearBtn = document.getElementById('clearBtn');
+    const testBtn = document.getElementById('testBtn');
+
+    let port = null;
+    let connected = false;
+
+    function addLog(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      log.textContent += `[${timestamp}] ${msg}\n`;
+      log.scrollTop = log.scrollHeight;
+    }
+
+    async function connect() {
+      if (!('serial' in navigator)) {
+        addLog('❌ Web Serial API not supported! Use Chrome/Edge.');
+        return;
+      }
+
+      try {
+        addLog('🔌 Requesting serial port...');
+        port = await navigator.serial.requestPort();
+        addLog('✅ Port selected');
+
+        addLog('📡 Opening port at 115200 baud...');
+        await port.open({ baudRate: 115200 });
+        addLog('✅ Port opened successfully');
+
+        connected = true;
+        statusEl.textContent = '✅ Connected';
+        connectBtn.textContent = 'Disconnect';
+        addLog('🎯 Ready to receive data...');
+
+        const decoder = new TextDecoderStream();
+        const inputStream = decoder.readable;
+        const reader = inputStream.getReader();
+        port.readable.pipeTo(decoder.writable).catch(err => {
+          addLog(`⚠️ Pipe error: ${err.message}`);
+        });
+
+        async function readLoop() {
+          try {
+            while (true) {
+              const { value, done } = await reader.read();
+              if (done) {
+                addLog('⚠️ Reader closed');
+                break;
+              }
+              if (!value) continue;
+              
+              // Show raw hexdump + plaintext
+              addLog(`📥 RAW (${value.length} chars): "${value}"`);
+              
+              // Also show as hex
+              let hex = '';
+              for (let i = 0; i < value.length; i++) {
+                hex += value.charCodeAt(i).toString(16).padStart(2, '0') + ' ';
+              }
+              addLog(`   HEX: ${hex}`);
+            }
+          } catch (err) {
+            addLog(`❌ Read error: ${err.message}`);
+            connected = false;
+            statusEl.textContent = '❌ Disconnected';
+            connectBtn.textContent = 'Connect';
+          }
+        }
+
+        readLoop();
+      } catch (err) {
+        addLog(`❌ Connection error: ${err.message}`);
+        connected = false;
+        statusEl.textContent = '❌ Disconnected';
+      }
+    }
+
+    function disconnect() {
+      if (port) {
+        port.close().catch(() => {});
+        addLog('🔌 Port closed');
+        connected = false;
+        statusEl.textContent = '❌ Disconnected';
+        connectBtn.textContent = 'Connect';
+      }
+    }
+
+    connectBtn.addEventListener('click', () => {
+      if (connected) {
+        disconnect();
+      } else {
+        connect();
+      }
+    });
+
+    clearBtn.addEventListener('click', () => {
+      log.textContent = '[Log cleared]\n';
+    });
+
+    testBtn.addEventListener('click', () => {
+      addLog('💡 [TEST] Simulating ESP32 output:');
+      addLog('450,480,FORWARD');
+      addLog('520,560,IDLE');
+      addLog('200,150,FORWARD');
+    });
+
+    addLog('✨ Serial Debug Console Ready');
+    addLog('Pro tip: Open DevTools Console (F12) for even more info');
+  </script>
+</body>
+</html>

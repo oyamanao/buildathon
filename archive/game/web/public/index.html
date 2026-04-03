@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Echo-Blade: Aetherbound</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Arial', sans-serif; background-color: #0a0e27; color: #ffffff; padding: 20px; }
+    .container { max-width: 800px; margin: 0 auto; }
+    h1 { color: #00d9ff; margin-bottom: 20px; font-size: 28px; }
+    .card { background: #1a2847; border: 2px solid #00d9ff; border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+    .row { margin: 12px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+    label { font-weight: bold; color: #00d9ff; }
+    select { padding: 8px 12px; background: #0f1d3d; color: #00d9ff; border: 1px solid #00d9ff; border-radius: 4px; cursor: pointer; }
+    button { padding: 10px 16px; background: #00d9ff; color: #0a0e27; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; }
+    button:hover { background: #00ffff; }
+    .log { background: #000; color: #0f0; border: 1px solid #0f0; padding: 12px; border-radius: 4px; height: 200px; overflow-y: auto; font-family: 'Courier New', monospace; font-size: 12px; }
+    .status { font-size: 18px; font-weight: bold; }
+    .status-item { margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎮 Echo-Blade: Aetherbound</h1>
+    
+    <div class="card">
+      <h2 style="color: #00d9ff; margin-bottom: 12px;">Game Input</h2>
+      <div class="row">
+        <label>Glove State:</label>
+        <select id="gloveState">
+          <option value="REST">REST (00)</option>
+          <option value="GUARD">GUARD (01)</option>
+          <option value="GRASP">GRASP (10)</option>
+          <option value="CHANNEL">CHANNEL (11)</option>
+        </select>
+      </div>
+      <div class="row">
+        <label>Voice Word:</label>
+        <select id="voiceWord">
+          <option value="None">None</option>
+          <option value="Strike">Strike</option>
+          <option value="Ignis">Ignis</option>
+          <option value="Heal">Heal</option>
+        </select>
+      </div>
+      <div class="row">
+        <button id="sendBtn">Send Action</button>
+        <button id="refreshHist">Refresh History</button>
+        <a href="/debug.html" style="margin-left: 16px; padding: 10px 16px; background: #ff9800; color: #0a0e27; border: none; border-radius: 4px; font-weight: bold; cursor: pointer; text-decoration: none; display: inline-block;">🔧 Serial Debug</a>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="color: #00d9ff; margin-bottom: 12px;">Game Status</h2>
+      <div class="status">
+        <div class="status-item">Combo: <span id="comboVal" style="color: #ffff00;">NONE</span></div>
+        <div class="status-item">Effect: <span id="effectVal" style="color: #ffff00;">Inactive</span></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2 style="color: #00d9ff; margin-bottom: 12px;">Event History</h2>
+      <div class="log" id="historyLog">Waiting for events...</div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
