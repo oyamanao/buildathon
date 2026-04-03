@@ -59,6 +59,29 @@ export default function LoginScreen({ onLogin }) {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const audioRef = useRef(null);
+
+  useEffect(() => {
+    // We instantiate Audio instead of JSX <audio> to keep it simple and detached
+    audioRef.current = new Audio('/assets/audio/Southern Grain Fields.wav');
+    audioRef.current.loop = true;
+    audioRef.current.volume = 0.3;
+
+    // Play on first interaction if blocked
+    const playAudio = () => {
+      audioRef.current?.play().catch(e => console.warn('BGM blocked:', e));
+      window.removeEventListener('click', playAudio);
+    };
+    window.addEventListener('click', playAudio);
+
+    return () => {
+      window.removeEventListener('click', playAudio);
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current = null;
+      }
+    };
+  }, []);
 
   const handleSubmit = async (e) => {
     e.preventDefault();

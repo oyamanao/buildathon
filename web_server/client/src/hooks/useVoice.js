@@ -73,8 +73,8 @@ export function useVoice() {
     };
 
     recognition.onerror = (event) => {
-      console.error('Speech recognition error:', event.error);
       if (event.error !== 'no-speech') {
+        console.error('Speech recognition error:', event.error);
         // We do not stop on 'no-speech' since silence is normal
         setError(`Microphone error: ${event.error}`);
       }

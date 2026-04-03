@@ -2,12 +2,13 @@ import { useEffect, useRef, useState } from 'react';
 import { useSerial } from '../hooks/useSerial';
 import { useVoice } from '../hooks/useVoice';
 import { GameEngine } from '../game/GameEngine';
+import { audioManager } from '../game/AudioManager';
 
 export default function GameScreen({ user, onLogout }) {
   const canvasRef = useRef(null);
   const engineRef = useRef(null);
   const gestureRef = useRef('IDLE');
-  const { serialData, serialDataRef, connectSerial, disconnectSerial, connected } = useSerial();
+  const { serialData, serialDataRef, connectSerial, disconnectSerial, connected, rawBuffer } = useSerial();
   const { isListening, mode: voiceMode, setMode, toggleVoice, error: voiceError } = useVoice();
   const connectedRef = useRef(false);
   const modeRef = useRef('MOVE');
@@ -123,11 +124,13 @@ export default function GameScreen({ user, onLogout }) {
       if (ok) {
         setLoaded(true);
         engine.start();
+        audioManager.playBgm('bgm', 0.2); // Start background music
       }
     });
 
     return () => {
       engine.stop();
+      audioManager.stopBgm();
       ro.disconnect();
     };
   }, []);

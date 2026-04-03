@@ -4,11 +4,19 @@
  */
 
 // ─── Sprite Atlas Loader ──────────────────────────────
+import { audioManager } from './AudioManager';
+
 async function loadImage(src) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => resolve(img);
-    img.onerror = reject;
+    img.onerror = () => {
+      console.warn(`Fallback image loading failed: ${src}`);
+      // return a blank canvas to prevent crash
+      const canvas = document.createElement('canvas');
+      canvas.width = 1; canvas.height = 1;
+      resolve(canvas);
+    };
     img.src = src;
   });
 }
@@ -114,11 +122,20 @@ export class GameEngine {
 
   async load() {
     try {
+      // Preload Audio
+      await audioManager.load({
+        'bgm': '/assets/audio/Chill RPG theme (RPG).wav',
+        'jump': '/assets/audio/Leap (Gj3).wav',
+        'attack': '/assets/audio/Sword Slash (Rpg).wav',
+        'spell': '/assets/audio/Dagger Basic Attack Combo.wav',
+        'step': '/assets/audio/Footsteps Loop 1 (Rpg).wav'
+      });
+
       const [tilesetImg, backImg, middleImg, mapData, dinoImg, 
              heroIdle, heroRun, heroJump, heroAttack] = await Promise.all([
-        loadImage('/assets/environment/tileset.png'),
-        loadImage('/assets/environment/back.png'),
-        loadImage('/assets/environment/middle.png'),
+        loadImage('/assets/environment/gothic/tileset.png'),
+        loadImage('/assets/environment/gothic/background.png'),
+        loadImage('/assets/environment/gothic/graveyard.png'),
         loadJSON('/assets/maps/map.json'),
         loadImage('/assets/sprites/dino-red.png'),
         loadImage('/assets/sprites/hero-idle.png'),
@@ -244,6 +261,7 @@ export class GameEngine {
     // Simple cooldown
     if (performance.now() - (this.lastSpellTime || 0) < 500) return false;
     this.lastSpellTime = performance.now();
+    audioManager.playSound('spell', 0.6);
 
     // Spawn fireball from Companion
     // Companion is this.companion
@@ -280,6 +298,7 @@ export class GameEngine {
     // Simple cooldown for sword swings
     if (performance.now() - (this.lastSwordTime || 0) < 400) return false;
     this.lastSwordTime = performance.now();
+    audioManager.playSound('attack', 0.5);
 
     // Trigger hero-attack.png animation
     this.animState = 'attack';
@@ -376,6 +395,7 @@ export class GameEngine {
       p.vy = JUMP_FORCE;
       p.grounded = false;
       this.jumpConsumed = true;
+      audioManager.playSound('jump', 0.4);
     }
 
     // Gravity
