@@ -4,12 +4,14 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 
 export function useVoice() {
   const [isListening, setIsListening] = useState(false);
-  const [mode, setMode] = useState('MOVE'); // 'MOVE', 'ATTACK'
+  const [mode, setMode] = useState('MOVE'); // 'MOVE', 'SWORD', 'SPELL'
   const [error, setError] = useState('');
   const [lastCommand, setLastCommand] = useState('');
   
   const recognitionRef = useRef(null);
   const manualStopRef = useRef(false);
+  const restartTimeoutRef = useRef(null);
+  const isActiveRef = useRef(false); // tracks if we WANT to be listening
 
   useEffect(() => {
     if (!SpeechRecognition) {
@@ -73,21 +75,30 @@ export function useVoice() {
     };
 
     recognition.onerror = (event) => {
-      if (event.error !== 'no-speech') {
-        console.error('Speech recognition error:', event.error);
-        // We do not stop on 'no-speech' since silence is normal
-        setError(`Microphone error: ${event.error}`);
+      // Ignore common non-critical errors
+      if (event.error === 'no-speech' || event.error === 'aborted') {
+        return;
       }
+      console.error('Speech recognition error:', event.error);
+      setError(`Microphone error: ${event.error}`);
     };
 
     recognition.onend = () => {
-      if (!manualStopRef.current) {
-        // Automatically restart if it dropped out natively
-        try {
-          recognitionRef.current.start();
-        } catch (e) {
-          setIsListening(false);
-        }
+      // Only auto-restart if we WANT to be listening (not manually stopped)
+      if (!manualStopRef.current && isActiveRef.current) {
+        // Small delay before restart to avoid rapid restart loops
+        if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+        restartTimeoutRef.current = setTimeout(() => {
+          if (isActiveRef.current && recognitionRef.current) {
+            try {
+              recognitionRef.current.start();
+            } catch (e) {
+              // Already started or other issue — just update state
+              setIsListening(false);
+              isActiveRef.current = false;
+            }
+          }
+        }, 300);
       } else {
         setIsListening(false);
       }
@@ -96,9 +107,12 @@ export function useVoice() {
     recognitionRef.current = recognition;
 
     return () => {
+      isActiveRef.current = false;
+      manualStopRef.current = true;
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      if (window.voiceTimeout) clearTimeout(window.voiceTimeout);
       if (recognitionRef.current) {
-        manualStopRef.current = true;
-        recognitionRef.current.stop();
+        try { recognitionRef.current.stop(); } catch (e) {}
       }
     };
   }, []);
@@ -107,16 +121,23 @@ export function useVoice() {
     if (!recognitionRef.current) return;
 
     if (isListening) {
+      // Stop listening
       manualStopRef.current = true;
-      recognitionRef.current.stop();
+      isActiveRef.current = false;
+      if (restartTimeoutRef.current) clearTimeout(restartTimeoutRef.current);
+      try { recognitionRef.current.stop(); } catch (e) {}
       setIsListening(false);
     } else {
+      // Start listening
       manualStopRef.current = false;
+      isActiveRef.current = true;
       try {
         recognitionRef.current.start();
         setIsListening(true);
       } catch (e) {
-        console.error(e);
+        console.error('Failed to start speech recognition:', e);
+        setError('Could not start microphone. Check permissions.');
+        isActiveRef.current = false;
       }
     }
   }, [isListening]);

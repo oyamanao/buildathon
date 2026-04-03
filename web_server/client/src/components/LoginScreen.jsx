@@ -68,15 +68,16 @@ export default function LoginScreen({ onLogin }) {
     audioRef.current.loop = true;
     audioRef.current.volume = 0.3;
 
-    // Play on first interaction if blocked
+    // Play on first user gesture (respects browser autoplay policy)
+    const events = ['click', 'touchstart', 'keydown', 'pointerdown'];
     const playAudio = () => {
-      audioRef.current?.play().catch(e => console.warn('BGM blocked:', e));
-      window.removeEventListener('click', playAudio);
+      audioRef.current?.play().catch(() => {});
+      events.forEach(evt => document.removeEventListener(evt, playAudio, { capture: true }));
     };
-    window.addEventListener('click', playAudio);
+    events.forEach(evt => document.addEventListener(evt, playAudio, { once: false, capture: true }));
 
     return () => {
-      window.removeEventListener('click', playAudio);
+      events.forEach(evt => document.removeEventListener(evt, playAudio, { capture: true }));
       if (audioRef.current) {
         audioRef.current.pause();
         audioRef.current = null;
@@ -118,18 +119,11 @@ export default function LoginScreen({ onLogin }) {
         {/* Title area */}
         <div className="login-title-area">
           <img
-            src="/assets/sprites/title-screen.png"
-            alt="Echo-Blade"
+            src="/assets/cinder_logo.png"
+            alt="CINDER"
             className="login-title-image"
+            style={{ filter: 'drop-shadow(0 4px 16px rgba(255, 157, 0, 0.6))', width: '320px' }}
           />
-          <p className="pixel-subtitle" style={{ marginTop: 8 }}>
-            Aetherbound
-          </p>
-
-          {/* Fox sprite character */}
-          <div style={{ marginTop: 8 }}>
-            <FoxSprite />
-          </div>
         </div>
 
         {/* Login Card */}

@@ -1,6 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
 import { useSerial } from '../hooks/useSerial';
-import { useVoice } from '../hooks/useVoice';
 import { GameEngine } from '../game/GameEngine';
 import { audioManager } from '../game/AudioManager';
 
@@ -9,13 +8,12 @@ export default function GameScreen({ user, onLogout }) {
   const engineRef = useRef(null);
   const gestureRef = useRef('IDLE');
   const { serialData, serialDataRef, connectSerial, disconnectSerial, connected, rawBuffer } = useSerial();
-  const { isListening, mode: voiceMode, setMode, toggleVoice, error: voiceError } = useVoice();
   const connectedRef = useRef(false);
-  const modeRef = useRef('MOVE');
   const [gesture, setGesture] = useState('IDLE');
   const [score, setScore] = useState(0);
   const [loaded, setLoaded] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [musicOn, setMusicOn] = useState(true);
 
   // ─── Keyboard input ────────────────────────────────
   const keysDown = useRef(new Set());
@@ -46,18 +44,11 @@ export default function GameScreen({ user, onLogout }) {
     connectedRef.current = connected;
   }, [connected]);
 
-  useEffect(() => {
-    modeRef.current = voiceMode;
-    if (engineRef.current) {
-      engineRef.current.setMode(voiceMode);
-    }
-  }, [voiceMode]);
-
-  // ─── Resolve input: two channels (jump + horizontal) + mode ─────
+  // ─── Resolve input: two channels (jump + horizontal) ─────
   useEffect(() => {
     const interval = setInterval(() => {
       let jump = false;
-      let horizontal = 'none'; // 'left', 'right', 'none'
+      let horizontal = 'none';
       let displayGesture = 'IDLE';
 
       // Base keyboard input
@@ -72,24 +63,18 @@ export default function GameScreen({ user, onLogout }) {
         horizontal = 'left';
       }
 
-      tapped.clear(); // Consume taps for this frame
+      tapped.clear();
 
-      // Override with glove input if connected AND sending a non-idle signal
+      // Override with glove input if connected
       if (connectedRef.current) {
         const signal = serialDataRef.current?.signal;
         if (signal === '01') { jump = false; horizontal = 'right'; }
         else if (signal === '10') { jump = false; horizontal = 'left'; }
         else if (signal === '11') { jump = true; horizontal = 'none'; }
-        // If signal is '00', we just let the keyboard input remain
       }
 
       if (engineRef.current) {
-        const casted = engineRef.current.setInput(jump, horizontal, modeRef.current);
-        if (casted) {
-          setMode('MOVE');
-          modeRef.current = 'MOVE';
-        }
-        
+        engineRef.current.setInput(jump, horizontal, 'MOVE');
         displayGesture = engineRef.current.getGestureName();
         setScore(Math.floor(engineRef.current.score));
       }
@@ -124,7 +109,6 @@ export default function GameScreen({ user, onLogout }) {
       if (ok) {
         setLoaded(true);
         engine.start();
-        audioManager.playBgm('bgm', 0.2); // Start background music
       }
     });
 
@@ -161,13 +145,18 @@ export default function GameScreen({ user, onLogout }) {
         </div>
 
         <div className="game-header-right">
-          <div className={`status-badge ${isListening ? 'status-badge--connected' : 'status-badge--disconnected'} ${voiceMode !== 'MOVE' ? 'status-badge--combat pulse' : ''}`}>
-            <span className="status-dot"></span>
-            Voice: {voiceMode}
+          <div className="combo-hints" style={{ fontSize: 9, opacity: 0.8, color: '#aaa', display: 'flex', gap: '10px' }}>
+            <div><span style={{ color: '#ffcc00' }}>R→R→J→R</span>=⚔</div>
+            <div><span style={{ color: '#ffec00' }}>L→L→J→L</span>=🌀</div>
+            <div><span style={{ color: '#ff6600' }}>L→R→J</span>=🔥</div>
+            <div><span style={{ color: '#00ffff' }}>R→L→J</span>=⚡</div>
           </div>
-          
-          <button className="pixel-btn--ghost pixel-btn" onClick={toggleVoice} style={{ fontSize: 7, padding: '4px 10px' }}>
-            {isListening ? 'Mic Off' : 'Mic On'}
+
+          <button className="pixel-btn--ghost pixel-btn" onClick={() => {
+            const on = audioManager.toggleBgm();
+            setMusicOn(on);
+          }} style={{ fontSize: 7, padding: '4px 10px' }}>
+            🎵 {musicOn ? 'ON' : 'OFF'}
           </button>
 
           <div className={`status-badge ${connected ? 'status-badge--connected' : 'status-badge--disconnected'}`}>
@@ -243,13 +232,13 @@ export default function GameScreen({ user, onLogout }) {
                 <div className={`gesture-cell ${gesture === 'IDLE' ? 'gesture-cell--active' : ''}`}>
                   00
                 </div>
-                <div className={`gesture-cell ${gesture === 'FORWARD' ? 'gesture-cell--active' : ''}`}>
+                <div className={`gesture-cell ${gesture === 'FORWARD' || gesture.includes('R') ? 'gesture-cell--active' : ''}`}>
                   01
                 </div>
-                <div className={`gesture-cell ${gesture === 'BACK' ? 'gesture-cell--active' : ''}`}>
+                <div className={`gesture-cell ${gesture === 'BACK' || gesture.includes('L') ? 'gesture-cell--active' : ''}`}>
                   10
                 </div>
-                <div className={`gesture-cell ${gesture === 'JUMP' ? 'gesture-cell--active' : ''}`}>
+                <div className={`gesture-cell ${gesture === 'JUMP' || gesture.includes('J') ? 'gesture-cell--active' : ''}`}>
                   11
                 </div>
               </div>
